@@ -172,10 +172,8 @@ async def test_enqueue_non_pending_raises(settings: Settings, db: Database):
 
 async def test_queue_size_increases_on_enqueue(settings: Settings, db: Database):
     """Verify queue_size reflects pending items (before workers consume them)."""
-    # Use a very slow AI backend so items stay in the queue
     tq = TaskQueue(settings=settings, db=db)
     # Don't start workers so queue accumulates
-    # (we'll just check _queue.qsize() after putting)
     tq._queue = asyncio.Queue()
     tq._running = True  # bypass the running check
 
@@ -210,7 +208,6 @@ async def test_successful_task_sets_status_done(settings: Settings, db: Database
     await tq.start()
     try:
         await tq.enqueue(task_record)
-        # Wait for the queue to drain
         await asyncio.wait_for(tq._queue.join(), timeout=10.0)
     finally:
         await tq.stop(timeout=5.0)
@@ -302,7 +299,6 @@ async def test_connection_error_sets_status_failed(settings: Settings, db: Datab
 
 async def test_task_timeout_sets_status_failed(settings: Settings, db: Database):
     """A task that exceeds task_timeout_seconds should be marked FAILED."""
-    # Override task timeout to a very small value
     with patch.dict(os.environ, {"TASK_TIMEOUT_SECONDS": "0.05", "AGENT_BRIDGE_TESTING": "1"}):
         fast_timeout_settings = Settings()
 
@@ -313,7 +309,6 @@ async def test_task_timeout_sets_status_failed(settings: Settings, db: Database)
     task_record = await _create_and_get_task(db, "Slow task")
 
     tq = TaskQueue(settings=fast_timeout_settings, db=db)
-    # Patch the internal _run_ai to simulate slowness
     with patch.object(tq, "_run_ai", side_effect=slow_ai):
         await tq.start()
         try:
